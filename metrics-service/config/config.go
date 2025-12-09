@@ -43,5 +43,5 @@ type APP struct {
 type Kafka struct {
 	Brokers          string `env:"KAFKA_BROKERS" envDefault:"localhost:9092"`
 	ConsumerGroup    string `env:"KAFKA_SUBSCRIBER_GROUP_ID" envDefault:"metric-service"`
-	SubscriberTopics string `env:"KAFKA_SUBSCRIBER_TOPICS" envDefault:"payments.created,payments.checked,wallet.response,wallet.debit.requested"`
+	SubscriberTopics string `env:"KAFKA_SUBSCRIBER_TOPICS" envDefault:"payments.created,payments.checked,wallet.funds.verified,wallet.debit.requested"`
 }

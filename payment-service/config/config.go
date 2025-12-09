@@ -45,7 +45,7 @@ type Kafka struct {
 	Brokers              string `env:"KAFKA_BROKERS" envDefault:"localhost:9092"`
 	PaymentConsumerGroup string `env:"KAFKA_PAYMENT_GROUP_ID" envDefault:"payment-service"`
 	PublishTopics        string `env:"KAFKA_PUBLISH_TOPICS" envDefault:"payments.created,wallet.debit.requested,payments.dlq"`
-	SubscriberTopics     string `env:"KAFKA_SUBSCRIBER_TOPICS" envDefault:"payments.checked,wallet.response"`
+	SubscriberTopics     string `env:"KAFKA_SUBSCRIBER_TOPICS" envDefault:"payments.checked,wallet.funds.verified"`
 
 	RetryMaxAttempts int           `env:"KAFKA_RETRY_MAX_ATTEMPTS" envDefault:"5"`
 	RetryBaseDelay   time.Duration `env:"KAFKA_RETRY_BASE_DELAY" envDefault:"100ms"`

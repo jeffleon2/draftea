@@ -8,7 +8,7 @@ const (
 	WalletStatusApproved WalletStatus = "APPROVED"
 	WalletStatusDeclined WalletStatus = "DECLINED"
 
-	WalletResponseTopic = "wallet.response"
+	WalletResponseTopic = "wallet.funds.verified"
 	WalletDLQTopic      = "wallet.dlq"
 )
 

@@ -37,7 +37,7 @@ graph TB
             T1[payments.created]
             T2[payments.checked]
             T3[wallet.debit.requested]
-            T4[wallet.response]
+            T4[wallet.funds.verified]
             T5[payments.dlq]
             T6[wallet.dlq]
         end
@@ -124,12 +124,12 @@ sequenceDiagram
         
         alt Saldo suficiente
             WS->>DB: Debitar wallet
-            WS->>K: Publicar wallet.response (APPROVED)
+            WS->>K: Publicar wallet.funds.verified (APPROVED)
         else Saldo insuficiente
-            WS->>K: Publicar wallet.response (DECLINED)
+            WS->>K: Publicar wallet.funds.verified (DECLINED)
         end
         
-        K->>PS: Consumir wallet.response
+        K->>PS: Consumir wallet.funds.verified
         
         alt Débito exitoso
             PS->>DB: Actualizar Payment (APPROVED)
@@ -141,7 +141,7 @@ sequenceDiagram
     par Métricas
         K->>MS: Consumir payments.checked
         K->>MS: Consumir wallet.debit.requested
-        K->>MS: Consumir wallet.response
+        K->>MS: Consumir wallet.funds.verified
         MS->>MS: Actualizar métricas
     end
 ```
@@ -165,7 +165,7 @@ flowchart LR
         E1[payments.created]
         E2[payments.checked]
         E3[wallet.debit.requested]
-        E4[wallet.response]
+        E4[wallet.funds.verified]
     end
     
     subgraph "Fraud Service"
@@ -238,7 +238,7 @@ GET    /health            - Health check
 
 **Eventos Consumidos:**
 - `payments.checked` - Resultado de validación de fraude
-- `wallet.response` - Resultado de operación de débito
+- `wallet.funds.verified` - Resultado de verificación de fondos y débito
 
 **Base de Datos:** PostgreSQL (payments)
 - Tabla: `payments` (id, amount, currency, status, method, customer_id, trace_id, created_at, updated_at)
@@ -285,7 +285,7 @@ GET    /health            - Health check
 - ❌ NO conoce el contexto completo del pago
 
 **Eventos Publicados:**
-- `wallet.response` - Resultado de operación de débito (APPROVED/DECLINED)
+- `wallet.funds.verified` - Resultado de verificación de fondos y débito (APPROVED/DECLINED)
 
 **Eventos Consumidos:**
 - `wallet.debit.requested` - Solicitudes de débito
@@ -318,7 +318,7 @@ GET /metrics - Endpoint Prometheus
 - `payments.created`
 - `payments.checked`
 - `wallet.debit.requested`
-- `wallet.response`
+- `wallet.funds.verified`
 
 **Métricas Expuestas:**
 ```
@@ -343,7 +343,7 @@ wallet_debit_declined_total
 | `payments.created` | Payment Service | Fraud Service, Metrics Service | Nuevo pago creado en el sistema |
 | `payments.checked` | Fraud Service | Payment Service, Metrics Service | Resultado de validación de fraude |
 | `wallet.debit.requested` | Payment Service | Wallet Service, Metrics Service | Solicitud de débito a wallet |
-| `wallet.response` | Wallet Service | Payment Service, Metrics Service | Respuesta de operación de wallet |
+| `wallet.funds.verified` | Wallet Service | Payment Service, Metrics Service | Resultado de verificación de fondos y débito |
 | `payments.dlq` | Payment Service | - | Mensajes fallidos del payment service |
 | `wallet.dlq` | Wallet Service | - | Mensajes fallidos del wallet service |
 
@@ -385,7 +385,7 @@ wallet_debit_declined_total
 }
 ```
 
-#### wallet.response
+#### wallet.funds.verified
 ```json
 {
   "payment_id": "payment-uuid",
@@ -400,7 +400,7 @@ wallet_debit_declined_total
 
 **Topics:**
 - Formato: `{dominio}.{acción}[.{estado}]`
-- Ejemplos: `payments.created`, `wallet.response`, `payments.dlq`
+- Ejemplos: `payments.created`, `wallet.funds.verified`, `payments.dlq`
 
 **Consumer Groups:**
 - Formato: `{servicio}-{topic}-consumer`
@@ -431,8 +431,8 @@ stateDiagram-v2
     WalletDebit --> WalletApproved: Saldo suficiente
     WalletDebit --> WalletDeclined: Saldo insuficiente
     
-    WalletApproved --> PaymentApproved: wallet.response
-    WalletDeclined --> PaymentDeclined: wallet.response
+    WalletApproved --> PaymentApproved: wallet.funds.verified
+    WalletDeclined --> PaymentDeclined: wallet.funds.verified
     
     PaymentApproved --> [*]
     PaymentDeclined --> [*]
@@ -715,7 +715,7 @@ docker-compose up --scale payment-service=3
 payments.created:      6 particiones
 payments.checked:      6 particiones
 wallet.debit.requested: 6 particiones
-wallet.response:       6 particiones
+wallet.funds.verified: 6 particiones
 ```
 
 **Key de partición:** `payment_id` (garantiza orden para mismo pago)

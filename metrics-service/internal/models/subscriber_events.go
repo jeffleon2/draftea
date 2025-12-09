@@ -5,7 +5,7 @@ import "time"
 const (
 	TopicPaymentsCreated      = "payments.created"
 	TopicPaymentsChecked      = "payments.checked"
-	TopicWalletResponse       = "wallet.response"
+	TopicWalletResponse       = "wallet.funds.verified"
 	TopicWalletDebitRequested = "wallet.debit.requested"
 )
 

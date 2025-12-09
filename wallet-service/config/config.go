@@ -46,7 +46,7 @@ type Kafka struct {
 	WalletConsumerGroup  string        `env:"KAFKA_WALLET_GROUP_ID"   envDefault:"wallet-service"`
 	PaymentConsumerGroup string        `env:"KAFKA_PAYMENT_GROUP_ID" envDefault:"payment-service"`
 	SubscriberTopics     string        `env:"KAFKA_SUBSCRIBER_TOPICS" envDefault:"payments.created,wallet.debit.requested"`
-	PublishTopics        string        `env:"KAFKA_PUBLISH_TOPICS" envDefault:"wallet.response,wallet.dlq"`
+	PublishTopics        string        `env:"KAFKA_PUBLISH_TOPICS" envDefault:"wallet.funds.verified,wallet.dlq"`
 	RetryMaxAttempts     int           `env:"KAFKA_RETRY_MAX_ATTEMPTS" envDefault:"5"`
 	RetryBaseDelay       time.Duration `env:"KAFKA_RETRY_BASE_DELAY" envDefault:"100ms"`
 	RetryMaxDelay        time.Duration `env:"KAFKA_RETRY_MAX_DELAY" envDefault:"10s"`

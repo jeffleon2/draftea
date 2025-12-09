@@ -4,7 +4,7 @@ import "time"
 
 const (
 	FraudTopic2Subscribe  string = "payments.checked"
-	WalletTopic2Subscribe string = "wallet.response"
+	WalletTopic2Subscribe string = "wallet.funds.verified"
 
 	PaymentStatusApproved = "APPROVED"
 	PaymentStatusDeclined = "DECLINED"
