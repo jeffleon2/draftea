@@ -36,10 +36,11 @@ graph TB
         subgraph "Topics"
             T1[payments.created]
             T2[payments.checked]
-            T3[wallet.debit.requested]
-            T4[wallet.funds.verified]
-            T5[payments.dlq]
-            T6[wallet.dlq]
+            T3[wallet.funds.verified]
+            T4[wallet.debit.requested]
+            T5[wallet.debit.completed]
+            T6[payments.dlq]
+            T7[wallet.dlq]
         end
     end
     
@@ -55,24 +56,29 @@ graph TB
     API -->|HTTP POST /payments| PS
     PS -->|Publica| T1
     PS -->|Consume| T2
-    PS -->|Consume| T4
-    PS -->|Publica| T3
+    PS -->|Consume| T3
+    PS -->|Publica| T4
+    PS -->|Consume| T5
     PS <-->|CRUD| PDB
     
     T1 -->|Consume| FS
     FS -->|Publica| T2
     
-    T3 -->|Consume| WS
-    WS -->|Publica| T4
+    T1 -->|Consume| WS
+    WS -->|Publica| T3
+    
+    T4 -->|Consume| WS
+    WS -->|Publica| T5
     WS <-->|CRUD| WDB
     
     T1 -->|Consume| MS
     T2 -->|Consume| MS
     T3 -->|Consume| MS
     T4 -->|Consume| MS
+    T5 -->|Consume| MS
     
-    PS -.->|Errores| T5
-    WS -.->|Errores| T6
+    PS -.->|Errores| T6
+    WS -.->|Errores| T7
     
     MS -->|Expone métricas| PROM
     
@@ -96,55 +102,56 @@ sequenceDiagram
     participant DB as PostgreSQL
     
     C->>PS: POST /payments
-    PS->>DB: Guardar Payment (PENDING)
+    PS->>DB: Guardar Payment (PENDING)<br/>fraud_checked=false<br/>funds_verified=false
     PS->>K: Publicar payments.created
     PS-->>C: 201 Created {payment_id}
     
-    par Procesamiento Paralelo
+    par Verificación Paralela de Fraude
         K->>FS: Consumir payments.created
         FS->>FS: Análisis de fraude
-        alt Pago aprobado
+        alt Sin fraude
             FS->>K: Publicar payments.checked (APPROVED)
-        else Pago rechazado
+        else Fraude detectado
             FS->>K: Publicar payments.checked (DECLINED)
         end
-    and
-        K->>MS: Consumir payments.created
-        MS->>MS: Registrar métrica payment_created
-    end
-    
-    K->>PS: Consumir payments.checked
-    
-    alt Fraude detectado
-        PS->>DB: Actualizar Payment (DECLINED)
-    else Sin fraude
-        PS->>K: Publicar wallet.debit.requested
-        K->>WS: Consumir wallet.debit.requested
-        WS->>DB: Verificar saldo
-        
+        K->>PS: Consumir payments.checked
+        PS->>DB: Actualizar fraud_checked=true
+    and Verificación Paralela de Fondos
+        K->>WS: Consumir payments.created
+        WS->>DB: Verificar saldo disponible
         alt Saldo suficiente
-            WS->>DB: Debitar wallet
             WS->>K: Publicar wallet.funds.verified (APPROVED)
         else Saldo insuficiente
             WS->>K: Publicar wallet.funds.verified (DECLINED)
         end
-        
         K->>PS: Consumir wallet.funds.verified
-        
-        alt Débito exitoso
-            PS->>DB: Actualizar Payment (APPROVED)
-        else Débito fallido
-            PS->>DB: Actualizar Payment (DECLINED)
-        end
+        PS->>DB: Actualizar funds_verified=true
+    and Métricas
+        K->>MS: Consumir payments.created
+        MS->>MS: Registrar métrica payment_created
     end
     
-    par Métricas
+    PS->>PS: Evaluar: fraud_checked && funds_verified
+    
+    alt Ambas verificaciones OK
+        PS->>K: Publicar wallet.debit.requested
+        K->>WS: Consumir wallet.debit.requested
+        WS->>DB: Debitar wallet
+        WS->>K: Publicar wallet.debit.completed
+        K->>PS: Consumir wallet.debit.completed
+        PS->>DB: Actualizar Payment (APPROVED)
+    else Alguna verificación falló
+        PS->>DB: Actualizar Payment (DECLINED)
+    end
+    
+    par Métricas Finales
         K->>MS: Consumir payments.checked
-        K->>MS: Consumir wallet.debit.requested
         K->>MS: Consumir wallet.funds.verified
+        K->>MS: Consumir wallet.debit.requested (si aplica)
         MS->>MS: Actualizar métricas
     end
 ```
+
 
 ### Diagrama de Flujo de Datos
 
@@ -234,11 +241,12 @@ GET    /health            - Health check
 
 **Eventos Publicados:**
 - `payments.created` - Cuando se crea un nuevo pago
-- `wallet.debit.requested` - Solicita débito al wallet después de pasar validación de fraude
+- `wallet.debit.requested` - Solicita débito al wallet (solo si fraud_checked=OK y funds_verified=OK)
 
 **Eventos Consumidos:**
-- `payments.checked` - Resultado de validación de fraude
-- `wallet.funds.verified` - Resultado de verificación de fondos y débito
+- `payments.checked` - Resultado de validación de fraude (actualiza flag fraud_checked)
+- `wallet.funds.verified` - Resultado de verificación de fondos (actualiza flag funds_verified)
+- `wallet.debit.completed` - Confirmación de débito ejecutado
 
 **Base de Datos:** PostgreSQL (payments)
 - Tabla: `payments` (id, amount, currency, status, method, customer_id, trace_id, created_at, updated_at)
@@ -285,10 +293,12 @@ GET    /health            - Health check
 - ❌ NO conoce el contexto completo del pago
 
 **Eventos Publicados:**
-- `wallet.funds.verified` - Resultado de verificación de fondos y débito (APPROVED/DECLINED)
+- `wallet.funds.verified` - Resultado de verificación de fondos disponibles (APPROVED/DECLINED, sin débito)
+- `wallet.debit.completed` - Confirmación de débito ejecutado (APPROVED/DECLINED)
 
 **Eventos Consumidos:**
-- `wallet.debit.requested` - Solicitudes de débito
+- `payments.created` - Nuevos pagos para verificar fondos
+- `wallet.debit.requested` - Solicitudes de débito (solo después de verificaciones OK)
 
 **Base de Datos:** PostgreSQL (wallet)
 - Tabla: `wallets` (id, user_id, balance, currency, created_at, updated_at)
@@ -317,8 +327,9 @@ GET /metrics - Endpoint Prometheus
 **Eventos Consumidos:**
 - `payments.created`
 - `payments.checked`
-- `wallet.debit.requested`
 - `wallet.funds.verified`
+- `wallet.debit.requested`
+- `wallet.debit.completed`
 
 **Métricas Expuestas:**
 ```
@@ -340,10 +351,11 @@ wallet_debit_declined_total
 
 | Evento | Productor | Consumidores | Descripción |
 |--------|-----------|--------------|-------------|
-| `payments.created` | Payment Service | Fraud Service, Metrics Service | Nuevo pago creado en el sistema |
+| `payments.created` | Payment Service | Fraud Service, Wallet Service, Metrics Service | Nuevo pago creado en el sistema |
 | `payments.checked` | Fraud Service | Payment Service, Metrics Service | Resultado de validación de fraude |
-| `wallet.debit.requested` | Payment Service | Wallet Service, Metrics Service | Solicitud de débito a wallet |
-| `wallet.funds.verified` | Wallet Service | Payment Service, Metrics Service | Resultado de verificación de fondos y débito |
+| `wallet.funds.verified` | Wallet Service | Payment Service, Metrics Service | Resultado de verificación de fondos disponibles (sin débito) |
+| `wallet.debit.requested` | Payment Service | Wallet Service, Metrics Service | Solicitud de débito a wallet (solo si fraud y funds OK) |
+| `wallet.debit.completed` | Wallet Service | Payment Service, Metrics Service | Confirmación de débito ejecutado en wallet |
 | `payments.dlq` | Payment Service | - | Mensajes fallidos del payment service |
 | `wallet.dlq` | Wallet Service | - | Mensajes fallidos del wallet service |
 
@@ -392,7 +404,18 @@ wallet_debit_declined_total
   "user_id": "user-uuid",
   "status": "APPROVED|DECLINED",
   "amount": 100.50,
-  "reason": "insufficient_funds|success"
+  "reason": "insufficient_funds|funds_available"
+}
+```
+
+#### wallet.debit.completed
+```json
+{
+  "payment_id": "payment-uuid",
+  "user_id": "user-uuid",
+  "status": "APPROVED|DECLINED",
+  "amount": 100.50,
+  "reason": "debit_successful|debit_failed"
 }
 ```
 
@@ -420,26 +443,44 @@ El sistema implementa un **patrón Saga coreografiado** para el procesamiento de
 ```mermaid
 stateDiagram-v2
     [*] --> PaymentCreated: POST /payments
-    PaymentCreated --> FraudCheck: payments.created
     
-    FraudCheck --> FraudApproved: Sin fraude
-    FraudCheck --> FraudDeclined: Fraude detectado
+    state "Verificaciones Paralelas" as ParallelChecks {
+        state fork_state <<fork>>
+        PaymentCreated --> fork_state
+        
+        fork_state --> FraudCheck
+        fork_state --> FundsCheck
+        
+        FraudCheck --> FraudApproved: Sin fraude
+        FraudCheck --> FraudDeclined: Fraude detectado
+        
+        FundsCheck --> FundsApproved: Fondos suficientes
+        FundsCheck --> FundsDeclined: Fondos insuficientes
+        
+        state join_state <<join>>
+        FraudApproved --> join_state
+        FundsApproved --> join_state
+        FraudDeclined --> join_state
+        FundsDeclined --> join_state
+    }
     
-    FraudApproved --> WalletDebit: wallet.debit.requested
-    FraudDeclined --> PaymentDeclined: payments.checked
+    join_state --> EvaluateBothChecks: Evaluar ambas banderas
     
-    WalletDebit --> WalletApproved: Saldo suficiente
-    WalletDebit --> WalletDeclined: Saldo insuficiente
+    EvaluateBothChecks --> WalletDebit: Ambas OK
+    EvaluateBothChecks --> PaymentDeclined: Alguna falló
     
-    WalletApproved --> PaymentApproved: wallet.funds.verified
-    WalletDeclined --> PaymentDeclined: wallet.funds.verified
+    WalletDebit --> DebitSuccess: Débito exitoso
+    WalletDebit --> DebitFailed: Débito fallido
+    
+    DebitSuccess --> PaymentApproved: wallet.debit.completed
+    DebitFailed --> PaymentDeclined: wallet.debit.completed
     
     PaymentApproved --> [*]
     PaymentDeclined --> [*]
     
-    note right of FraudDeclined: Transacción compensatoria:<br/>No se requiere rollback<br/>ya que no hubo débito
+    note right of EvaluateBothChecks: Payment Service verifica:<br/>fraud_checked=true && funds_verified=true
     
-    note right of WalletDeclined: Transacción compensatoria:<br/>Payment actualizado a DECLINED<br/>No se requiere reembolso
+    note right of PaymentDeclined: Transacción compensatoria:<br/>No se requiere rollback<br/>ya que no hubo débito
 ```
 
 **Transacciones Compensatorias:**
@@ -508,16 +549,6 @@ stateDiagram-v2
 - ✅ PromQL para queries flexibles
 - ✅ Integración nativa con Grafana
 
-### Frameworks y Librerías
-
-| Componente | Tecnología | Propósito |
-|------------|------------|-----------|
-| HTTP Framework | Gin | Router HTTP de alto rendimiento |
-| ORM | GORM | Abstracción de base de datos |
-| Kafka Client | segmentio/kafka-go | Cliente Kafka nativo en Go |
-| Logging | Logrus | Logging estructurado |
-| Config | godotenv + caarlos0/env | Gestión de configuración |
-| UUID | google/uuid | Generación de IDs únicos |
 
 ### Containerización y Orquestación
 
@@ -714,8 +745,9 @@ docker-compose up --scale payment-service=3
 ```
 payments.created:      6 particiones
 payments.checked:      6 particiones
-wallet.debit.requested: 6 particiones
 wallet.funds.verified: 6 particiones
+wallet.debit.requested: 6 particiones
+wallet.debit.completed: 6 particiones
 ```
 
 **Key de partición:** `payment_id` (garantiza orden para mismo pago)
