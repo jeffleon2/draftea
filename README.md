@@ -477,10 +477,6 @@ stateDiagram-v2
     
     PaymentApproved --> [*]
     PaymentDeclined --> [*]
-    
-    note right of EvaluateBothChecks: Payment Service verifica:<br/>fraud_checked=true && funds_verified=true
-    
-    note right of PaymentDeclined: Transacción compensatoria:<br/>No se requiere rollback<br/>ya que no hubo débito
 ```
 
 **Transacciones Compensatorias:**

@@ -12,20 +12,26 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// PaymentService defines the interface for payment business logic operations.
 type PaymentService interface {
 	CreatePayment(ctx context.Context, payment *dto.Payment) error
 	UpdatePaymentFlags(ctx context.Context, paymentID string, walletApproved, fraudClean *bool, failureReason string) error
 }
 
+// PaymentHandler handles HTTP requests and Kafka events for payment operations.
+// It acts as the adapter layer between HTTP/Kafka and the payment service business logic.
 type PaymentHandler struct {
 	Service PaymentService
 }
 
+// NewPaymentHandler creates a new PaymentHandler with the provided service.
 func NewPaymentHandler(s PaymentService) *PaymentHandler {
 	return &PaymentHandler{Service: s}
 }
 
-// POST /payments
+// CreatePayment handles POST /payments HTTP requests.
+// It validates the request body, delegates to the service layer,
+// and returns 201 Created on success or appropriate error status.
 func (h *PaymentHandler) CreatePayment(c *gin.Context) {
 	var req dto.Payment
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -41,6 +47,13 @@ func (h *PaymentHandler) CreatePayment(c *gin.Context) {
 	c.JSON(http.StatusCreated, req)
 }
 
+// HandleEvents processes Kafka events for payment verification updates.
+// It handles two types of events:
+//   - wallet.funds.verified: Updates wallet approval status
+//   - payments.checked: Updates fraud check status
+//
+// The handler unmarshals the event, extracts the relevant status,
+// and calls UpdatePaymentFlags to update the payment's verification state.
 func (h *PaymentHandler) HandleEvents(ctx context.Context, topic string, value []byte) error {
 	var walletStatus *bool
 	var fraudStatus *bool

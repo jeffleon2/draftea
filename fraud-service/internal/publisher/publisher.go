@@ -12,11 +12,21 @@ import (
 	kafka "github.com/segmentio/kafka-go"
 )
 
+// KafkaPublisher manages Kafka message publishing with retry capabilities.
+// It maintains a pool of Kafka writers, one per topic, and implements
+// exponential backoff retry logic for failed publish attempts.
 type KafkaPublisher struct {
 	Writers     map[string]*kafka.Writer
 	RetryConfig config.RetryConfig
 }
 
+// NewKafkaPublisher creates a new KafkaPublisher with writers for the specified topics.
+// It initializes default retry configuration values if not provided:
+//   - MaxAttempts: 5
+//   - BaseDelay: 100ms
+//   - MaxDelay: 10s
+//
+// Each topic gets its own dedicated Kafka writer using LeastBytes balancing strategy.
 func NewKafkaPublisher(kafkaURL string, topics []string, retryConfig config.RetryConfig) *KafkaPublisher {
 	writers := make(map[string]*kafka.Writer)
 	if retryConfig.MaxAttempts == 0 {
@@ -43,6 +53,11 @@ func NewKafkaPublisher(kafkaURL string, topics []string, retryConfig config.Retr
 	}
 }
 
+// Publish sends a message to the specified Kafka topic with automatic retry on failure.
+// The message is marshaled to JSON before publishing. Returns an error if:
+//   - No writer is configured for the topic
+//   - JSON marshaling fails
+//   - Publishing fails after all retry attempts
 func (p *KafkaPublisher) Publish(ctx context.Context, topic string, message interface{}) error {
 	writer, ok := p.Writers[topic]
 	if !ok {
@@ -61,6 +76,9 @@ func (p *KafkaPublisher) Publish(ctx context.Context, topic string, message inte
 	return p.publishWithRetry(ctx, writer, msg, topic)
 }
 
+// publishWithRetry attempts to publish a message with exponential backoff retry logic.
+// It will retry up to MaxAttempts times, with increasing delays between attempts.
+// Returns nil on successful publish, or an error if all attempts fail or context is cancelled.
 func (p *KafkaPublisher) publishWithRetry(ctx context.Context, writer *kafka.Writer, msg kafka.Message, topic string) error {
 	var lastErr error
 
@@ -96,6 +114,9 @@ func (p *KafkaPublisher) publishWithRetry(ctx context.Context, writer *kafka.Wri
 		topic, p.RetryConfig.MaxAttempts, lastErr)
 }
 
+// calculateBackoff computes the delay for the next retry attempt using exponential backoff.
+// The delay is calculated as: 2^attempt * BaseDelay, capped at MaxDelay.
+// If Jitter is enabled, adds random variation (±30%) to prevent thundering herd.
 func (p *KafkaPublisher) calculateBackoff(attempt int) time.Duration {
 	delay := time.Duration(math.Pow(2, float64(attempt))) * p.RetryConfig.BaseDelay
 
