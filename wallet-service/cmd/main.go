@@ -48,7 +48,6 @@ func main() {
 		}
 	}
 
-	// TODO leon: arreglar brokers permitir []string
 	publishers := publisher.NewKafkaPublisher(brokers[0], publishTopics, cfg.Kafka.GetRetryConfig())
 
 	multiConsumer := subscriber.NewMultiTopicConsumer(brokers, subscriberTopics, cfg.Kafka.WalletConsumerGroup, publishers, cfg.Kafka.GetRetryConfig())

@@ -1,0 +1,18 @@
+with-expecter: true
+packages:
+  github.com/jeffleon2/draftea-fraud-service/internal/handler:
+    interfaces:
+      FraudServiceIn:
+        config:
+          dir: "{{.InterfaceDir}}/mocks"
+          filename: "{{.InterfaceName}}.go"
+          mockname: "Mock{{.InterfaceName}}"
+          outpkg: mocks
+  github.com/jeffleon2/draftea-fraud-service/internal/service:
+    interfaces:
+      Publisher:
+        config:
+          dir: "{{.InterfaceDir}}/mocks"
+          filename: "{{.InterfaceName}}.go"
+          mockname: "Mock{{.InterfaceName}}"
+          outpkg: mocks

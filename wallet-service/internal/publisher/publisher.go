@@ -104,7 +104,7 @@ func (p *KafkaPublisher) calculateBackoff(attempt int) time.Duration {
 	}
 
 	if p.RetryConfig.Jitter {
-		jitter := time.Duration(rand.Float64() * float64(delay) * 0.3) // ±30%
+		jitter := time.Duration(rand.Float64() * float64(delay) * 0.3)
 		delay = delay + jitter - time.Duration(float64(delay)*0.15)
 	}
 

@@ -1,0 +1,16 @@
+with-expecter: true
+packages:
+  github.com/jeffleon2/draftea-wallet-service/internal/service:
+    interfaces:
+      WalletRepo:
+        config:
+          dir: "{{.InterfaceDir}}/mocks"
+          filename: "{{.InterfaceName}}.go"
+          mockname: "Mock{{.InterfaceName}}"
+          outpkg: mocks
+      Publisher:
+        config:
+          dir: "{{.InterfaceDir}}/mocks"
+          filename: "{{.InterfaceName}}.go"
+          mockname: "Mock{{.InterfaceName}}"
+          outpkg: mocks
