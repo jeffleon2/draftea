@@ -729,7 +729,6 @@ type CircuitBreaker struct {
 **Todos los servicios son stateless**, permitiendo escalamiento horizontal sin coordinación:
 
 ```yaml
-# Ejemplo: Escalar Payment Service
 docker-compose up --scale payment-service=3
 ```
 
@@ -789,42 +788,11 @@ graph LR
 
 **Algoritmo:** Round Robin con health checks
 
-**Configuración Nginx:**
-```nginx
-upstream payment_service {
-    least_conn;
-    server payment-service-1:8080 max_fails=3 fail_timeout=30s;
-    server payment-service-2:8080 max_fails=3 fail_timeout=30s;
-    server payment-service-3:8080 max_fails=3 fail_timeout=30s;
-}
-```
-
 #### Nivel de Kafka
 
 - **Balanceo automático** mediante consumer groups
 - **Sticky partitioning** para mantener afinidad de caché
-
 ### Particionamiento de Base de Datos
-
-#### Sharding por Customer ID
-
-**Estrategia:** Horizontal sharding basado en `customer_id`
-
-```
-Shard 1: customer_id hash % 4 == 0
-Shard 2: customer_id hash % 4 == 1
-Shard 3: customer_id hash % 4 == 2
-Shard 4: customer_id hash % 4 == 3
-```
-
-**Implementación:**
-```go
-func GetShardID(customerID string) int {
-    hash := crc32.ChecksumIEEE([]byte(customerID))
-    return int(hash % 4)
-}
-```
-
 #### Read Replicas
 
 ```mermaid
@@ -852,36 +820,10 @@ graph TB
 
 ### Estrategias de Caché
 
-#### 1. Caché de Aplicación (In-Memory)
-
-**Wallet Balance Cache:**
-```go
-type WalletCache struct {
-    cache map[string]WalletBalance
-    ttl   time.Duration // 30 segundos
-    mu    sync.RWMutex
-}
-```
-
-**Invalidación:**
-- TTL de 30 segundos
-- Invalidación explícita después de débito/crédito
-
-#### 2. Redis (Opcional para producción)
-
 **Casos de uso:**
 - Caché de saldos de wallet (lectura frecuente)
 - Rate limiting por customer
 - Session storage
-
-**Configuración:**
-```yaml
-redis:
-  mode: cluster
-  nodes: 3
-  replication_factor: 2
-  eviction_policy: allkeys-lru
-```
 
 ### Análisis de Cuellos de Botella
 
@@ -940,35 +882,6 @@ graph LR
 ### Auto-Scaling (Kubernetes)
 
 **Horizontal Pod Autoscaler (HPA):**
-
-```yaml
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: payment-service-hpa
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: payment-service
-  minReplicas: 2
-  maxReplicas: 10
-  metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 70
-  - type: Resource
-    resource:
-      name: memory
-      target:
-        type: Utilization
-        averageUtilization: 80
-```
-
----
 
 ## 🚀 Instalación y Configuración
 
@@ -1031,30 +944,7 @@ curl -X POST http://localhost:8080/payments \
 ### Acceso a Herramientas
 
 - **Adminer (DB UI):** http://localhost:8081
-- **Prometheus:** http://localhost:9090 (si configurado)
+- **Prometheus:** http://localhost:9090
 - **Kafka UI:** Configurar Kafka UI separadamente
 
 ---
-
-## 📚 Documentación Adicional
-
-- [API Documentation](./docs/api.md) *(pendiente)*
-- [Development Guide](./docs/development.md) *(pendiente)*
-- [Deployment Guide](./docs/deployment.md) *(pendiente)*
-- [Troubleshooting](./docs/troubleshooting.md) *(pendiente)*
-
----
-
-## 📄 Licencia
-
-Este proyecto es privado y confidencial.
-
----
-
-## 👥 Contribuidores
-
-- **Jeff Leon** - Arquitectura y desarrollo inicial
-
----
-
-**Última actualización:** Diciembre 2024
