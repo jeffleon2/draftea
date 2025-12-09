@@ -1,0 +1,49 @@
+version: "3.9"
+
+services:
+  wallet-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wallet-service
+    env_file: .env
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${APP_PORT:-8070}:8070"
+    networks:
+      - wallet-network            
+      - payment-service_payment-network  
+
+  postgres:
+    image: postgres:15
+    container_name: wallet-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-wallet}
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5433:5432"
+    volumes:
+      - wallet-db-data:/var/lib/postgresql/data
+      - ./db:/docker-entrypoint-initdb.d
+    networks:
+      - wallet-network
+      - payment-service_payment-network  
+
+networks:
+  wallet-network:
+    driver: bridge
+  payment-service_payment-network:
+    external: true
+
+volumes:
+  wallet-db-data:
