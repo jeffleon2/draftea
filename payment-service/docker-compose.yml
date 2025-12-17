@@ -67,6 +67,21 @@ services:
       - payment-network
       - shared-network
 
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - 8082:8080
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+    depends_on:
+      - kafka
+    networks:
+      - payment-network
+      - shared-network
+
   kafka-init:
     image: confluentinc/cp-kafka:7.5.0
     container_name: kafka-init
